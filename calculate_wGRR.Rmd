@@ -1,0 +1,86 @@
+---
+title: "calculate_wGRR"
+output: html_document
+date: "2026-03-03"
+---
+
+```{r}
+library(dplyr)
+library(readr)
+library(stringr)
+```
+
+Load the raw Diamond output:
+
+```{r setup, include=FALSE}
+hits <- read_tsv('output/diamond_out.tsv',
+  col_names=c("qseqid","sseqid","pident","length","qlen",
+              "slen","qcovhsp","evalue","bitscore"),
+  col_types="ccdddddddd", comment="#")
+
+```
+
+Parse the plasmid names for both query and subject:
+
+```{r}
+hits <- hits %>% mutate(
+  q_plasmid = str_extract(qseqid, "[A-Z]{1,3}_?[A-Z0-9]+\\.[0-9]+"),
+  s_plasmid = str_extract(sseqid, "[A-Z]{1,3}_?[A-Z0-9]+\\.[0-9]+"))
+  
+```
+
+In case we want to filter low identity or coverage hits, we can adapt the following filtering script:
+
+```{r}
+message("  ", nrow(hits), " hits before filtering")
+
+hits <- hits %>%
+  filter(pident >= 30, qcovhsp >= 50,
+         q_plasmid != s_plasmid)
+
+message("  ", nrow(hits), " hits after filtering")
+```
+
+Now, nothing is filtered since we already specified these pident and qcovhsp filterings in the initial diamond call.
+
+For each gene, keep the single best hit per subject plasmid:
+
+```{r}
+best <- hits %>% 
+  group_by(qseqid, s_plasmid) %>%
+  slice_max(bitscore, n=1, with_ties=FALSE) %>%
+  ungroup()
+```
+
+Claude generated this part but it's not entirely clear to me what this does:
+
+```{r}
+fwd <- best %>% select(gA=qseqid, gB=sseqid, pA=q_plasmid, pB=s_plasmid, pident_fwd=pident)
+rev <- best %>% select(gB=qseqid, gA=sseqid, pB=q_plasmid, pA=s_plasmid, pident_rev=pident)
+
+rbh <- inner_join(fwd, rev, by=c("gA","gB","pA","pB")) %>%
+  mutate(pident_mean = (pident_fwd + pident_rev) / 2)
+```
+
+This is also Claude and it seems to work pretty well, but i need to look at this:
+
+```{r}
+# ── 5. Gene counts per plasmid (denominator) ──────────────────────────────────
+gene_counts <- hits %>%
+  select(gene=qseqid, plasmid=q_plasmid) %>%
+  bind_rows(hits %>% select(gene=sseqid, plasmid=s_plasmid)) %>%
+  distinct() %>%
+  count(plasmid, name="n_genes")
+
+# ── 6. wGRR ───────────────────────────────────────────────────────────────────
+# wGRR(A,B) = sum(pident/100 per RBH) / max(nGenes_A, nGenes_B)
+message("Calculating wGRR...")
+wgrr_pairs <- rbh %>%
+  group_by(pA, pB) %>%
+  summarise(n_rbh=n(), sum_pident=sum(pident_mean/100), .groups="drop") %>%
+  left_join(gene_counts %>% rename(pA=plasmid, nA=n_genes), by="pA") %>%
+  left_join(gene_counts %>% rename(pB=plasmid, nB=n_genes), by="pB") %>%
+  mutate(denom=pmax(nA,nB),
+         wGRR=pmin(pmax(sum_pident/denom, 0), 1))
+```
+
