@@ -19,4 +19,4 @@ bash scripts/run_diamond.sh
 ## Requirements
 
 - Python 3.9 with package `requests`
-- `ncbi-datasets` and `efetch`
+- `ncbi-datasets`, `efetch`, and `entrez-direct`
