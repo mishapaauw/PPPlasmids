@@ -153,6 +153,17 @@ coords %>% ggplot(aes(x = MDS1, y = MDS2, colour = species_clean)) + geom_point(
 ```
 
 ```{r}
+coords %>% filter(MDS1 > 0.5) %>% filter(MDS2 > 0) %>% 
+  ggplot(aes(x = MDS1, y = MDS2, colour = species_clean, size = length)) + 
+  geom_point(alpha = 1) + 
+  scale_colour_brewer(palette = "Paired") +
+  theme_void()
+ 
+
+```
+
+
+```{r}
 library(gghighlight)
 
 coords %>% ggplot(aes(x = MDS1, y = MDS2, colour = species_clean)) + 
