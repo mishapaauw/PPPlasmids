@@ -137,4 +137,32 @@ coords <- coords[, c("plasmid_id", paste0("MDS", seq_len(2)))]
 ```{r}
 coords %>% ggplot(aes(x = MDS1, y = MDS2)) + geom_point(alpha = 0.5) + theme_bw()
 ```
+```{r}
+metadata <- read_tsv('data/metadata.tsv', col_names = c("accession", "species", "taxid", "length"))
 
+metadata <- metadata %>% mutate(species_clean = stringr::word(species, 1, 2))
+```
+
+```{r}
+coords <- merge(coords, metadata, by.x = "plasmid_id", by.y = "accession")
+```
+
+```{r}
+coords %>% ggplot(aes(x = MDS1, y = MDS2, colour = species_clean)) + geom_point(alpha = 0.5) + theme_bw()
+
+```
+
+```{r}
+library(gghighlight)
+
+coords %>% ggplot(aes(x = MDS1, y = MDS2, colour = species_clean)) + 
+  geom_point(alpha = 0.5) + 
+  gghighlight() +
+  facet_wrap(~ species_clean) + 
+  theme_void() 
+
+
+```
+TODO:
+
+Draw histograms of wGRR distributions in different species-species combinations 
