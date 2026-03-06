@@ -67,6 +67,8 @@ rbh <- inner_join(fwd, rev, by=c("gA","gB","pA","pB")) %>%
 
 This is Claude generated code and it seems to work pretty well, but i need to look at this. In the end, the wGRR is calculated between all plasmid pairs
 
+TODO: I need to fix the denominator of the wGRR function. According to De Sousa, Rocha 2023 (NAR): _min(A,B) is the number of proteins of the genome encoding the fewest proteins (A or B)_. So i need to get the number of proteins encoded by the plasmids. In the current implementation, i take the lowest amount of ORFs DETECTED in the diamond search. This is most likely (much?) lower than the actual total amount of proteins encoded.
+
 ```{r}
 # ── 5. Gene counts per plasmid (denominator) ──────────────────────────────────
 gene_counts <- hits %>%
@@ -291,17 +293,42 @@ ggraph(g_cross, layout = "fr") +
   geom_node_point(aes(colour = species), size = 1) +
   # scale_colour_brewer(palette = "Set2") +
   theme_graph() +
-  labs(title = "Cross-species plasmid transfer network (wGRR ≥ 0.9)",
+  labs(title = "Cross-species plasmid transfer network (wGRR ≥ 0.8)",
        colour = "Host species")
 ```
 
 
 ```{r}
-ggraph(g_cross, layout = 'linear', circular = TRUE) +
-  geom_node_point(aes(colour = species), size = 1) +
-  geom_edge_arc(linewidth = 0.2, alpha = 0.1) + 
-  coord_fixed()
+# add component membership
+g_cross <- g_cross %>%
+  activate(nodes) %>%
+  mutate(component = group_components())
+
+# summarise each component: size, n species, mean wGRR
+component_summary <- g_cross %>%
+  activate(nodes) %>%
+  as_tibble() %>%
+  group_by(component) %>%
+  summarise(
+    n_plasmids = n(),
+    n_species = n_distinct(species),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(n_species), desc(n_plasmids))
 ```
+
+```{r}
+target_component <- 3  # replace with your component of interest
+
+plasmids_of_interest <- g_cross %>%
+  activate(nodes) %>%
+  as_tibble() %>%
+  filter(component == target_component) 
+```
+
+
+
+
 Final visualization option: UMAP
 
 ```{r}
