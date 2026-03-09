@@ -65,26 +65,22 @@ rbh <- inner_join(fwd, rev, by=c("gA","gB","pA","pB")) %>%
   mutate(pident_mean = (pident_fwd + pident_rev) / 2)
 ```
 
-This is Claude generated code and it seems to work pretty well, but i need to look at this. In the end, the wGRR is calculated between all plasmid pairs
-
-TODO: I need to fix the denominator of the wGRR function. According to De Sousa, Rocha 2023 (NAR): _min(A,B) is the number of proteins of the genome encoding the fewest proteins (A or B)_. So i need to get the number of proteins encoded by the plasmids. In the current implementation, i take the lowest amount of ORFs DETECTED in the diamond search. This is most likely (much?) lower than the actual total amount of proteins encoded.
+The next section calculates the wGRR value between each plasmid pair:
+(Claude generated code block)
 
 ```{r}
 # ── 5. Gene counts per plasmid (denominator) ──────────────────────────────────
-gene_counts <- hits %>%
-  select(gene=qseqid, plasmid=q_plasmid) %>%
-  bind_rows(hits %>% select(gene=sseqid, plasmid=s_plasmid)) %>%
-  distinct() %>%
-  count(plasmid, name="n_genes")
+CDS_counts <- read_table('data/CDS_counts.tsv', col_names = FALSE)
+colnames(CDS_counts) <- c("n_CDS", "accession")
 
 # ── 6. wGRR ───────────────────────────────────────────────────────────────────
 # wGRR(A,B) = sum(pident/100 per RBH) / max(nGenes_A, nGenes_B)
 message("Calculating wGRR...")
 wgrr_pairs <- rbh %>%
   group_by(pA, pB) %>%
-  summarise(n_rbh=n(), sum_pident=sum(pident_mean/100), .groups="drop") %>%
-  left_join(gene_counts %>% rename(pA=plasmid, nA=n_genes), by="pA") %>%
-  left_join(gene_counts %>% rename(pB=plasmid, nB=n_genes), by="pB") %>%
+  summarise(n_rbh=n(), sum_pident=sum(pident_mean/100), .groups="drop")%>%
+  left_join(CDS_counts %>% rename(pA=accession, nA=n_CDS), by="pA") %>%
+  left_join(CDS_counts %>% rename(pB=accession, nB=n_CDS), by="pB") %>%
   mutate(denom=pmin(nA,nB),
          wGRR=pmin(pmax(sum_pident/denom, 0), 1))
 ```
@@ -242,6 +238,8 @@ nodes <- data.frame(name = unique(c(edges$pA, edges$pB))) %>%
 g <- tbl_graph(nodes = nodes, edges = edges, directed = FALSE, node_key = "name")
 ```
 
+Draw the network:
+
 ```{r}
 ggraph(g, layout = "fr") +  # Fruchterman-Reingold, good for clusters
   geom_edge_link(aes(alpha = wGRR), colour = "grey60") +
@@ -254,6 +252,8 @@ ggraph(g, layout = "fr") +  # Fruchterman-Reingold, good for clusters
   labs(title = "Plasmid relatedness network (wGRR ≥ 0.4)",
        colour = "Host species", edge_width = "wGRR") + theme_void()
 ```
+Highlight cross-species edges in the network:
+
 ```{r}
 g <- g %>%
   activate(edges) %>%
@@ -261,7 +261,7 @@ g <- g %>%
 
 ggraph(g, layout = "fr") +
   geom_edge_link(aes(colour = cross_species, width = wGRR, alpha = wGRR)) +
-  geom_node_point(aes(colour = species), size = 3) +
+  geom_node_point(aes(colour = species), size = 2) +
   scale_edge_colour_manual(values = c("FALSE" = "grey80", "TRUE" = "firebrick")) +
   scale_edge_width(range = c(0.3, 2)) +
   scale_edge_alpha(range = c(0.2, 0.9)) +
@@ -296,7 +296,9 @@ ggraph(g_cross, layout = "fr") +
   labs(title = "Cross-species plasmid transfer network (wGRR ≥ 0.8)",
        colour = "Host species")
 ```
+Pretty cool!
 
+Each sub graph thats not connected to others is called a 'component'. We can add that information and then pull out the particular accession names in each component.
 
 ```{r}
 # add component membership
@@ -317,13 +319,17 @@ component_summary <- g_cross %>%
   arrange(desc(n_species), desc(n_plasmids))
 ```
 
+I'm curious about component 8 in this case, which contains 5 plasmids from 4 different species!
+
 ```{r}
-target_component <- 3  # replace with your component of interest
+target_component <- 6  # replace with your component of interest
 
 plasmids_of_interest <- g_cross %>%
   activate(nodes) %>%
   as_tibble() %>%
   filter(component == target_component) 
+
+cat(plasmids_of_interest %>% pull(name))
 ```
 
 
