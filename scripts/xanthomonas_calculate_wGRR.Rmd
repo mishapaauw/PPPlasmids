@@ -1,0 +1,124 @@
+---
+title: "Xanthomonas_calculate_wGRR"
+output: html_document
+date: "2026-03-10"
+author: "Misha"
+---
+
+```{r}
+library(dplyr)
+library(readr)
+library(stringr)
+library(ggplot2)
+```
+
+Load the raw Diamond output:
+
+```{r setup, include=FALSE}
+hits <- read_tsv('../output/xanthomonas_diamond_out.tsv',
+  col_names=c("qseqid","sseqid","pident","length","qlen",
+              "slen","qcovhsp","evalue","bitscore"),
+  col_types="ccdddddddd", comment="#")
+
+```
+
+Parse the plasmid names for both query and subject:
+
+```{r}
+hits <- hits %>% mutate(
+  q_plasmid = str_extract(qseqid, "[A-Z]{1,3}_?[A-Z0-9]+\\.[0-9]+"),
+  s_plasmid = str_extract(sseqid, "[A-Z]{1,3}_?[A-Z0-9]+\\.[0-9]+"))
+
+all_plasmids <- sort(unique(c(hits$q_plasmid, hits$s_plasmid)))
+message("  ", length(all_plasmids), " plasmids detected")  
+```
+
+In case we want to filter low identity or coverage hits, we can adapt the following filtering script:
+
+```{r}
+message("  ", nrow(hits), " hits before filtering")
+
+hits <- hits %>%
+  filter(pident >= 30, qcovhsp >= 50,
+         q_plasmid != s_plasmid)
+
+message("  ", nrow(hits), " hits after filtering")
+```
+
+Now, nothing is filtered since we already specified these pident and qcovhsp filterings in the initial diamond call.
+
+For each gene, keep the single best hit per subject plasmid:
+
+```{r}
+best <- hits %>% 
+  group_by(qseqid, s_plasmid) %>%
+  slice_max(bitscore, n=1, with_ties=FALSE) %>%
+  ungroup()
+```
+
+Here we find reciprocal best hits between all proteins. In other words, if protein A hits protein B as best hit, B should also hit A as best hit to be called a RBH.
+
+```{r}
+fwd <- best %>% select(gA=qseqid, gB=sseqid, pA=q_plasmid, pB=s_plasmid, pident_fwd=pident)
+rev <- best %>% select(gB=qseqid, gA=sseqid, pB=q_plasmid, pA=s_plasmid, pident_rev=pident)
+
+rbh <- inner_join(fwd, rev, by=c("gA","gB","pA","pB")) %>%
+  mutate(pident_mean = (pident_fwd + pident_rev) / 2)
+```
+
+The next section calculates the wGRR value between each plasmid pair:
+(Claude generated code block)
+
+```{r}
+# ── 5. Gene counts per plasmid (denominator) ──────────────────────────────────
+CDS_counts <- read_table('../data/xanthomonas_CDS_counts.tsv', col_names = FALSE)
+colnames(CDS_counts) <- c("n_CDS", "accession")
+
+# ── 6. wGRR ───────────────────────────────────────────────────────────────────
+# wGRR(A,B) = sum(pident/100 per RBH) / max(nGenes_A, nGenes_B)
+message("Calculating wGRR...")
+wgrr_pairs <- rbh %>%
+  group_by(pA, pB) %>%
+  summarise(n_rbh=n(), sum_pident=sum(pident_mean/100), .groups="drop")%>%
+  left_join(CDS_counts %>% rename(pA=accession, nA=n_CDS), by="pA") %>%
+  left_join(CDS_counts %>% rename(pB=accession, nB=n_CDS), by="pB") %>%
+  mutate(denom=pmin(nA,nB),
+         wGRR=pmin(pmax(sum_pident/denom, 0), 1))
+```
+
+Turn into symmetric wGRR matrix. First we geneate an matrix filled with 0.0 values: this is the default for pA - pB pairs that did not have a single blast hit between them. Then we fill the diagonal with 1.0: that is pA == pB. Then we add the wGRR values prepared before.
+
+```{r}
+mat <- matrix(0.0, nrow=length(all_plasmids), ncol=length(all_plasmids),
+              dimnames=list(all_plasmids, all_plasmids))
+diag(mat) <- 1.0
+for (i in seq_len(nrow(wgrr_pairs))) {
+  pA <- wgrr_pairs$pA[i]; pB <- wgrr_pairs$pB[i]; v <- wgrr_pairs$wGRR[i]
+  mat[pA,pB] <- v; mat[pB,pA] <- v
+}
+```
+
+Display a summary of the matrix:
+
+```{r}
+off <- mat[lower.tri(mat)]
+message("\n--- wGRR summary ---")
+message("  Pairs total   : ", length(off))
+message("  wGRR > 0      : ", sum(off > 0))
+message("  Mean wGRR     : ", round(mean(off), 4))
+message("  Max  wGRR     : ", round(max(off),  4))
+```
+Now we turn the wGRR matrix into a distance matrix (distance = 1 - wGRR)
+
+```{r}
+dist_mat        <- 1 - mat
+dist_mat[dist_mat < 0] <- 0                        # floating-point guard
+diag(dist_mat)  <- 0                               # self-distance = 0
+
+dist_obj <- as.dist(dist_mat)
+```
+
+```{r}
+write.csv(dist_mat, '../output/xanthomonas_wGRR_distance_matrix.csv')
+```
+

@@ -4,14 +4,23 @@ In this project I will analyse plasmids of plant pathogenic bacteria. I will try
 
 ## Data download
 
-In summary, we will use PLSDB and ncbi-datasets to download all Xanthomonas plasmids. Right now the Xanthomonas query to PLSDB is hardcoded in the `get_taxonomy.py` script.
+In summary, we will use PLSDB and ncbi-datasets to download a set of plasmids of interest. In the first experiment, we queried PLSDB with just genus `Xanthomonas`. This is hardcoded in the `get_taxonomy.py` script. For the broader experiment accross differt plant pathogens, we will make a PLSDB query with the following taxa:
+
+- _Xylella_ (61 plasmids)
+- _Xanthomonas_ (489 plasmids)
+- _Clavibacter_ (49 plasmids)
+- _Pseudomonas syringae_ (114 plasmids)
+- _Erwinia_ (152 plasmids)
+- _Pectobacterium_ (23 plasmids)
+- _Dickeya_ (5 plasmids)
+- _Stenotrophomonas_ (19 plasmids)
 
 ```bash
 # Get taxonomy list
 python scripts/get_taxonomy.py 
 
 # Download protein files of each plasmid accession
-bash scripts/download_taxonomies.sh
+bash scripts/download_accessions.sh
 ```
 
 ## Run diamond blastp and analyze results
