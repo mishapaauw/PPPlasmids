@@ -185,7 +185,7 @@ component_summary <- g_cross %>%
 I'm curious about component 8 in this case, which contains 5 plasmids from 4 different species!
 
 ```{r}
-target_component <- 7 # replace with your component of interest
+target_component <- 6 # replace with your component of interest
 
 plasmids_of_interest <- g_cross %>%
   activate(nodes) %>%
