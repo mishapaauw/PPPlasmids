@@ -21,6 +21,11 @@ python scripts/get_taxonomy.py
 
 # Download protein files of each plasmid accession
 bash scripts/download_accessions.sh
+
+# get metadata of each accession (conda activate ppplasmids)
+bash scripts/get_metadata.sh
+
+
 ```
 
 ## Run diamond blastp and analyze results

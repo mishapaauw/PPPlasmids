@@ -1,5 +1,5 @@
 cat accessions.txt \
-| epost -db nuccore \
+| epost -db nuccore -email m.m.paauw@uva.nl \
 | esummary \
 | xtract -pattern DocumentSummary \
   -element AccessionVersion Organism TaxId Slen \

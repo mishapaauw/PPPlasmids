@@ -1,3 +1,4 @@
 data/
 diamond_db/
 output/diamond_out.tsv
+output/xanthomonas_diamond_out.tsv

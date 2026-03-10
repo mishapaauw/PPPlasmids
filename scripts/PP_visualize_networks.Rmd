@@ -1,0 +1,229 @@
+---
+title: "Visualize wGRR plasmid networks for plant pathogen experiment"
+output: html_document
+date: "2026-03-10"
+author: "Misha"
+---
+
+```{r}
+library(dplyr)
+library(readr)
+library(stringr)
+library(ggplot2)
+library(tidyverse)
+```
+
+```{r}
+dist_mat <- read.csv('../output/PP_wGRR_distance_matrix.csv', row.names = 1)
+dist_obj <- as.dist(dist_mat)
+```
+
+
+
+```{r}
+library(stringr)
+
+metadata <- read_tsv('../data/metadata.tsv', col_names = c("accession", "species", "taxid", "length"))
+
+metadata <- metadata %>% 
+  mutate(species = gsub("Candidatus ", "", species, ignore.case = TRUE)) %>% 
+  mutate(species_clean = stringr::word(species, 1, 2)) %>% 
+  mutate(genus = stringr::word(species, 1, 1)) 
+  
+```
+
+Merge metadata with the plasmid coordinates, plot with color for species:
+
+I want to find plasmid pairs of plasmids from different genus, and then look for high wGRR values
+
+```{r}
+metadata_minimal <- metadata %>% select(accession, genus)
+
+wgrr_pairs <- dist_mat %>%
+  as.data.frame() %>%
+  rownames_to_column("pA") %>%
+  pivot_longer(-1, names_to = "pB", values_to = "distance") %>%
+  rename(pA = 1) %>% 
+  mutate(wGRR = 1 - distance) %>% 
+  filter(pA != pB) %>%        # exclude self
+  filter(pA < pB)         # deduplicate if symmetric
+
+
+wgrr_pairs_species <- wgrr_pairs %>% 
+  merge(metadata_minimal, by.x = "pA", by.y = "accession") %>% 
+  mutate(genus_pA = genus) %>% 
+  select(-genus) %>% 
+  merge(metadata_minimal, by.x = "pB", by.y = "accession") %>% 
+  mutate(genus_pB = genus) %>% 
+  select(-genus) %>% 
+  mutate(genus_pair = paste(genus_pA, genus_pB, sep = "-"))
+```
+
+```{r}
+wgrr_pairs_species %>% group_by(genus_pair) %>% 
+  summarise(mean = mean(wGRR),
+            median = median(wGRR), 
+            min = min(wGRR),
+            max = max(wGRR))
+```
+
+```{r}
+wgrr_pairs_species %>% 
+  filter(genus_pA != genus_pB) %>% 
+  filter(wGRR > 0.5)
+```
+
+Interesting Dickeya - Xanthomonas plasmid pair with 0.9 wGRR!
+
+
+```{r}
+library(ggraph)
+library(tidygraph)
+```
+Alternative visualization in 2D space is a network (see Eduardo Rocha's papers). In these networks each plasmid becomes a node (a dot) and each wGRR connection (based on a threshold) is an edge (a line). It makes sense to only consider edges representing a certain level of similarity, e.g. wGRR > 0.5. 
+
+```{r}
+edges <- wgrr_pairs_species %>%
+  filter(wGRR >= 0.5) %>%
+  select(pA, pB, wGRR, genus_pA, genus_pB)
+
+# Node table with species annotation
+nodes <- data.frame(name = unique(c(edges$pA, edges$pB))) %>%
+  left_join(
+    wgrr_pairs_species %>% select(pA, genus_pA) %>% distinct() %>% rename(name = pA, species = genus_pA),
+    by = "name"
+  )
+
+g <- tbl_graph(nodes = nodes, edges = edges, directed = FALSE, node_key = "name")
+```
+
+Draw the network:
+
+```{r}
+ggraph(g, layout = "fr") +  # Fruchterman-Reingold, good for clusters
+  geom_edge_link(aes(alpha = wGRR), colour = "grey60") +
+  geom_node_point(aes(colour = species), size = 1) +
+  # geom_node_text(aes(label = name), repel = TRUE, size = 2.5) +
+  #scale_edge_width(range = c(0.3, 2)) +
+  scale_edge_alpha(range = c(0.3, 0.9)) +
+  #scale_colour_brewer(palette = "Set2") +
+  theme_graph() +
+  labs(title = "Plasmid relatedness network (wGRR ≥ 0.5)",
+       colour = "Host species", edge_width = "wGRR") + theme_void()
+```
+Highlight cross-species edges in the network:
+
+```{r}
+g <- g %>%
+  activate(edges) %>%
+  mutate(cross_species = genus_pA != genus_pB)
+
+ggraph(g, layout = "fr") +
+  geom_edge_link(aes(colour = cross_species, width = wGRR, alpha = wGRR)) +
+  geom_node_point(aes(colour = species), size = 2) +
+  scale_edge_colour_manual(values = c("FALSE" = "grey80", "TRUE" = "firebrick")) +
+  scale_edge_width(range = c(0.3, 2)) +
+  scale_edge_alpha(range = c(0.2, 0.9)) +
+  theme_graph() +
+  labs(title = "Cross-species plasmid transfer network",
+       edge_colour = "Cross-species")
+```
+
+
+Repeat but only include cross species interactions in building the network in the first place
+
+```{r}
+# keep only cross-species edges
+edges_cross <- wgrr_pairs_species %>%
+  filter(wGRR >= 0.5, genus_pA != genus_pB) %>%
+  select(pA, pB, wGRR, genus_pA, genus_pB)
+
+# nodes automatically limited to only those in cross-species edges
+nodes_cross <- data.frame(name = unique(c(edges_cross$pA, edges_cross$pB))) %>%
+  left_join(
+    wgrr_pairs_species %>% select(pA, genus_pA) %>% distinct() %>% rename(name = pA, species = genus_pA),
+    by = "name"
+  )
+
+g_cross <- tbl_graph(nodes = nodes_cross, edges = edges_cross, directed = FALSE, node_key = "name")
+
+```
+
+```{r}
+ggraph(g_cross, layout = "fr") +
+  geom_edge_link(aes(width = wGRR), colour = "firebrick") +
+  geom_node_point(aes(colour = species), size = 1) +
+  # scale_colour_brewer(palette = "Set2") +
+  scale_edge_width(range = c(0.3, 2)) +
+  theme_graph() +
+  labs(title = "Cross-species plasmid transfer network (wGRR ≥ 0.5)",
+       colour = "Host species")
+```
+Pretty cool!
+
+Each sub graph thats not connected to others is called a 'component'. We can add that information and then pull out the particular accession names in each component.
+
+```{r}
+# add component membership
+g_cross <- g_cross %>%
+  activate(nodes) %>%
+  mutate(component = group_components())
+
+# summarise each component: size, n species, mean wGRR
+component_summary <- g_cross %>%
+  activate(nodes) %>%
+  as_tibble() %>%
+  group_by(component) %>%
+  summarise(
+    n_plasmids = n(),
+    n_species = n_distinct(species),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(n_species), desc(n_plasmids))
+```
+
+I'm curious about component 8 in this case, which contains 5 plasmids from 4 different species!
+
+```{r}
+target_component <- 7 # replace with your component of interest
+
+plasmids_of_interest <- g_cross %>%
+  activate(nodes) %>%
+  as_tibble() %>%
+  filter(component == target_component) 
+
+cat(plasmids_of_interest %>% pull(name))
+```
+
+
+
+Final visualization option: UMAP
+
+```{r}
+library(uwot)
+library(ggplot2)
+
+dist_mat_object <- dist(dist_mat)
+
+# run UMAP on the distance matrix
+umap_res <- umap(dist_mat, n_neighbors = 10, min_dist = 2)
+
+# build a plottable dataframe
+umap_df <- data.frame(
+  UMAP1 = umap_res[, 1],
+  UMAP2 = umap_res[, 2],
+  plasmid = rownames(dist_mat)
+) %>%
+  left_join(
+    wgrr_pairs_species %>% select(pA, species_pA) %>% distinct() %>% rename(plasmid = pA, species = species_pA),
+    by = "plasmid"
+  )
+
+ggplot(umap_df, aes(UMAP1, UMAP2, colour = species)) +
+  geom_point(size = 1.5, alpha = 0.7) +
+  theme_void() +
+  labs(colour = "Host species")
+```
+
+
+
