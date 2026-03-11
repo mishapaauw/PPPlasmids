@@ -96,10 +96,11 @@ wgrr_pairs_species %>%
   mutate(length_pB = length) %>% 
   select(-length) %>% 
   filter(length_pA > 2000) %>% 
-  filter(length_pB > 2000) %>% 
-  arrange(desc(wGRR))
+  filter(length_pB > 2000) %>%
+  mutate(length_ratio = pmin(length_pA, length_pB) / pmax(length_pA, length_pB)) %>% 
+  arrange(desc(length_ratio))
 ```
-
+Looking at Xcc - Steno pair we find a Xcc plasmid encoding XopE and AvrBs3 genes, while the plasmid backbone is extremely similar to stenotrophomoas (pidentity > 0.8, 0.9)
 
 ```{r}
 library(ggraph)
