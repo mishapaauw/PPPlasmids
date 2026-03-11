@@ -9,11 +9,24 @@ In summary, we will use PLSDB and ncbi-datasets to download a set of plasmids of
 - _Xylella_ (61 plasmids)
 - _Xanthomonas_ (489 plasmids)
 - _Clavibacter_ (49 plasmids)
-- _Pseudomonas syringae_ (114 plasmids)
+- _Pseudomonas_
+  - _syringae_ (114 plasmids)
+  - _amygdali_ (42 plasmids)
+  - _savastanoi_ (9 plasmids)
+  - _viridiflava_ (1 plasmid)
 - _Erwinia_ (152 plasmids)
 - _Pectobacterium_ (23 plasmids)
 - _Dickeya_ (5 plasmids)
 - _Stenotrophomonas_ (19 plasmids)
+- _Pantoea_
+  - _ananatis_ (27 plasmids)
+  - _stewartii_ (22 plasmids)
+- _Burkholderia_ 
+  - _glumae_ (15 plasmids)
+  - _gladioli_ (23 plasmids)
+  - _capacia_ (9 plasmids)
+  
+Note that both _Ralstonia_ and _Agrobacterium_ are remarkably missing from this list, that's because they have many megaplasmids (or chromids) of over 1 Mbp.
 
 ```bash
 # Get taxonomy list
@@ -25,7 +38,8 @@ bash scripts/download_accessions.sh
 # get metadata of each accession (conda activate ppplasmids)
 bash scripts/get_metadata.sh
 
-
+# get CDS count of each plasmids
+bash scripts/get_CDS_counts.sh
 ```
 
 ## Run diamond blastp and analyze results
@@ -35,7 +49,7 @@ bash scripts/get_metadata.sh
 bash scripts/run_diamond.sh
 
 # Inspect data with Rmd file
-# interactive session with calculate_wGRR.Rmd
+# interactive session with calculate_wGRR.Rmd and visualize_networks.Rmd
 ```
 
 ## Follow up:

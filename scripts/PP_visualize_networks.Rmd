@@ -70,10 +70,35 @@ wgrr_pairs_species %>% group_by(genus_pair) %>%
 ```{r}
 wgrr_pairs_species %>% 
   filter(genus_pA != genus_pB) %>% 
-  filter(wGRR > 0.5)
+  filter(wGRR > 0.8)
 ```
 
-Interesting Dickeya - Xanthomonas plasmid pair with 0.9 wGRR!
+Dickeya - Xanthomonas plasmid pair with 0.9, and a Burkholderia - Xanthomonas pair of 0.87.
+
+Except these cases, there's little evidence for entire (virulence?) plasmids transferring between genera of plant pathogenic bacteira.
+
+I inspect the burkholderia-xanthomonas pair in greater detail in a clinker synteny plot.
+
+- The plasmid backbone is indeed the source of the high wGRR, the entire plasmid systems are > 0.9 identity similar between the plasmids of the two species.
+- Then the Xanthomonas hyacinthi plasmid has no apparent cargo genes except for a cytosine methyl transferase and an antitoxin protein
+- The Burkolderia cepacia plasmid has an entire mercury resistance operon. Which occurs in numerous bacterial genome assemblies (blastn of the 10 kb operon on NCBI) and on other plasmids in PLSDB (Agrobacterium!)
+
+When going a bit lower in wGRR we start to get quite some hits of very small plasmids (< 1500 bp), let's filter these out
+
+```{r}
+wgrr_pairs_species %>% 
+  filter(genus_pA != genus_pB) %>% 
+  filter(wGRR > 0.6) %>% 
+  merge(metadata %>% select(accession, length), by.x = "pA", by.y = "accession") %>%
+  mutate(length_pA = length) %>% 
+  select(-length) %>% 
+  merge(metadata %>% select(accession, length), by.x = "pB", by.y = "accession") %>% 
+  mutate(length_pB = length) %>% 
+  select(-length) %>% 
+  filter(length_pA > 2000) %>% 
+  filter(length_pB > 2000) %>% 
+  arrange(desc(wGRR))
+```
 
 
 ```{r}
@@ -120,7 +145,7 @@ g <- g %>%
 
 ggraph(g, layout = "fr") +
   geom_edge_link(aes(colour = cross_species, width = wGRR, alpha = wGRR)) +
-  geom_node_point(aes(colour = species), size = 2) +
+  geom_node_point(aes(colour = species), size = 1) +
   scale_edge_colour_manual(values = c("FALSE" = "grey80", "TRUE" = "firebrick")) +
   scale_edge_width(range = c(0.3, 2)) +
   scale_edge_alpha(range = c(0.2, 0.9)) +
@@ -151,12 +176,12 @@ g_cross <- tbl_graph(nodes = nodes_cross, edges = edges_cross, directed = FALSE,
 
 ```{r}
 ggraph(g_cross, layout = "fr") +
-  geom_edge_link(aes(width = wGRR), colour = "firebrick") +
-  geom_node_point(aes(colour = species), size = 1) +
-  # scale_colour_brewer(palette = "Set2") +
+  geom_edge_link(aes(width = wGRR), colour = "grey80") +
+  geom_node_point(aes(colour = species), size = 2.5) +
+  scale_colour_brewer(palette = "Set3") +
   scale_edge_width(range = c(0.3, 2)) +
   theme_graph() +
-  labs(title = "Cross-species plasmid transfer network (wGRR ≥ 0.5)",
+  labs(title = "Cross-species plasmid transfer network (wGRR ≥ 0.7)",
        colour = "Host species")
 ```
 Pretty cool!
@@ -185,12 +210,13 @@ component_summary <- g_cross %>%
 I'm curious about component 8 in this case, which contains 5 plasmids from 4 different species!
 
 ```{r}
-target_component <- 6 # replace with your component of interest
+target_component <- 4 # replace with your component of interest
 
 plasmids_of_interest <- g_cross %>%
   activate(nodes) %>%
   as_tibble() %>%
-  filter(component == target_component) 
+  filter(component == target_component) %>% 
+  merge(metadata, by.x = "name", by.y = "accession")
 
 cat(plasmids_of_interest %>% pull(name))
 ```

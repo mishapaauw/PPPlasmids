@@ -3,7 +3,7 @@ import requests
 url = "https://ccb-microbe.cs.uni-saarland.de/plsdb2025/api/filter_taxonomy"
 
 genera = ["Xanthomonas", "Clavibacter", "Xylella", "Erwinia", "Pectobacterium", "Dickeya", "Stenotrophomonas"]
-species = ["Pseudomonas syringae"]
+species = ["Pseudomonas syringae", "Pseudomonas savastanoi", "Pseudomonas amygdali", "Pseudomonas viridiflava", "Pantoea ananatis", "Pantoea stewartii", "Burkholderia glumae", "Burkholderia gladioli", "Burkholderia cepacia"]
 
 all_acc = set()
 
@@ -12,6 +12,7 @@ for g in genera:
     response = requests.get(url, params=params)
 
     if response.status_code == 200:
+        print("Got accessions for: " , g)
         data = response.json()
         all_acc.update(data["NUCCORE_ACC"])
     else:
@@ -22,6 +23,7 @@ for s in species:
     response = requests.get(url, params=params)
 
     if response.status_code == 200:
+        print("Got accessions for: " , s)
         data = response.json()
         all_acc.update(data["NUCCORE_ACC"])
     else:
