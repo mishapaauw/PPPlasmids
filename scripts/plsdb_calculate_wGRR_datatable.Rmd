@@ -1,0 +1,127 @@
+---
+title: "plsdb_full_wGRR"
+author: "Misha"
+date: "2026-03-16"
+output: html_document
+---
+
+The goal of this experiment is to find out whether plant pathogen plasmids are strongly related to ANY other plasmid of plsdb. With the hypothesis that we should find those if environmental bacteria are source of genetic material for plant pathogen bacteria.
+
+In this experiment, I will attempt to blastp all plsdb proteins to a database of plant pathogen plasmid proteins. Note that this is not an ALL-vs-ALL blast with all plsdb proteins - we are just interested in any plasmids hitting plasmids of plant pathogenic bacteria. That also means that this wGRR calculation will skip the 'reciprocal best hit' part since we don't have reciprocal blastp data.
+
+```{r}
+library(data.table)
+library(stringr)
+library(ggplot2)
+```
+
+Load the raw Diamond output:
+```{r setup, include=FALSE}
+hits <- fread('../output/plsdb_diamond_out.tsv',
+  col.names = c("qseqid","sseqid","pident","length","qlen",
+                "slen","qcovhsp","evalue","bitscore"),
+  colClasses = c("character","character","numeric","numeric","numeric",
+                 "numeric","numeric","numeric","numeric"),
+  comment.char = "#")
+```
+
+Parse plasmid names (note that now qseq and sseq are differently formatted, so they need a different parsing)
+```{r}
+hits[, c("q_protein_id", "q_plasmid") := tstrsplit(qseqid, "-", fixed = TRUE)]
+hits[, s_plasmid := str_extract(sseqid, "[A-Z]{1,3}_?[A-Z0-9]+\\.[0-9]+")]
+```
+
+Optional filtering step
+```{r}
+message("  ", nrow(hits), " hits before filtering")
+hits <- hits[pident >= 30 & qcovhsp >= 50 & q_plasmid != s_plasmid]
+message("  ", nrow(hits), " hits after filtering")
+```
+
+Selecting BEST blast hits happens here, not sure how though. Claude wrote this data.table code and im more used to tidyverse coding
+
+```{r}
+# best hit per query protein (already done)
+setkey(hits, qseqid, s_plasmid, bitscore)
+best <- unique(hits, by = c("qseqid", "s_plasmid"), fromLast = TRUE)
+
+# additionally: best hit per subject protein
+setkey(best, sseqid, q_plasmid, bitscore)
+best <- unique(best, by = c("sseqid", "q_plasmid"), fromLast = TRUE)
+```
+
+Here, we would usually go to RBH detection but we can't since we don't have reciprocal blast hits. So we continue to wGRR calculation. But we need the CDS counts of each new plsdb plasmid. We get that with bash `grep ">" /scratch/misha/plsdb/plsdb_clean.fasta | cut -f 2 -d '-' | sort | uniq -c | column -t > data/CDS_counts_plsdb.tsv`
+
+```{r}
+# ── 5. Gene counts per plasmid (denominator) ──────────────────────────────────
+CDS_counts_PP <- fread('../data/CDS_counts.tsv', col.names = c("n_CDS", "accession"))
+CDS_counts_plsdb <- fread('../data/CDS_counts_plsdb.tsv', col.names = c("n_CDS", "accession"))
+
+# ── 6. wGRR ───────────────────────────────────────────────────────────────────
+# wGRR(A,B) = sum(pident/100 per RBH) / max(nGenes_A, nGenes_B)
+message("Calculating wGRR...")
+wgrr_pairs <- best[, .(n_hits = .N, sum_pident = sum(pident / 100)), by = .(q_plasmid, s_plasmid)]
+
+wgrr_pairs <- merge(wgrr_pairs, 
+                    CDS_counts_plsdb[, .(q_plasmid = accession, nA = n_CDS)], 
+                    by = "q_plasmid", all.x = TRUE)
+wgrr_pairs <- merge(wgrr_pairs, 
+                    CDS_counts_PP[, .(s_plasmid = accession, nB = n_CDS)], 
+                    by = "s_plasmid", all.x = TRUE)
+
+wgrr_pairs[, denom := pmin(nA, nB)]
+wgrr_pairs[, wGRR  := sum_pident / denom]
+```
+
+Select plasmid pairs with wGRR above 0.1 and go back to the tidyverse:
+
+```{r}
+wgrr_filtered <- wgrr_pairs[wGRR > 0.1] %>% as_tibble()
+```
+
+```{r}
+metadata <- read.csv('../data/plsdb_metadata.csv')
+
+metadata <- metadata %>% mutate(species = gsub("Candidatus ", "", NUCCORE_Description, ignore.case = TRUE)) %>% 
+  mutate(species_clean = stringr::word(species, 1, 2)) %>% 
+  mutate(genus = stringr::word(species, 1, 1)) 
+
+metadata_minimal <- metadata %>% select(NUCCORE_ACC, species_clean, genus)
+
+wgrr_filtered <- wgrr_filtered %>% 
+  merge(metadata_minimal, by.x = "q_plasmid", by.y = "NUCCORE_ACC") %>% 
+  mutate(genus_pA = genus) %>%
+  mutate(species_pA = species_clean) %>% 
+  select(-genus) %>% 
+  select(-species_clean) %>% 
+  merge(metadata_minimal, by.x = "s_plasmid", by.y = "NUCCORE_ACC") %>% 
+  mutate(genus_pB = genus) %>%
+  mutate(species_pB = species_clean) %>% 
+  select(-genus) %>% 
+  select(-species_clean) %>% 
+  mutate(genus_pair = paste(genus_pA, genus_pB, sep = "-"))
+```
+
+Get list of original plant pathogen accessions:
+
+```{r}
+plant_pathogens <- read_tsv('../data/metadata.tsv', col_names = c("accession", "species", "taxid", "length")) %>% pull(accession)
+```
+Filter wGRR pairs that query plasmid should not be among plant pathogens: 
+
+Note: somehow there are q plasmids still that are among xanthomonas, not sure why!
+
+```{r}
+wgrr_filtered <- wgrr_filtered %>% filter(!q_plasmid %in% plant_pathogens)
+```
+
+Filter wGRR pairs that have less than 5 proteins hits between them
+
+```{r}
+wgrr_filtered <- wgrr_filtered %>% filter(n_hits > 4)
+```
+
+```{r}
+xcc <- wgrr_filtered %>% filter(species_pB == "Xanthomonas campestris") %>% arrange(desc(wGRR))
+```
+
