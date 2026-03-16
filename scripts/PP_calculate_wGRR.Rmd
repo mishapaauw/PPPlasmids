@@ -15,7 +15,7 @@ library(ggplot2)
 Load the raw Diamond output:
 
 ```{r setup, include=FALSE}
-hits <- read_tsv('../output/diamond_out.tsv',
+hits <- read_tsv('../output/diamond_out_max-target-5000.tsv',
   col_names=c("qseqid","sseqid","pident","length","qlen",
               "slen","qcovhsp","evalue","bitscore"),
   col_types="ccdddddddd", comment="#")
@@ -84,7 +84,7 @@ wgrr_pairs <- rbh %>%
          wGRR=pmin(pmax(sum_pident/denom, 0), 1))
 ```
 
-Turn into symmetric wGRR matrix. First we geneate an matrix filled with 0.0 values: this is the default for pA - pB pairs that did not have a single blast hit between them. Then we fill the diagonal with 1.0: that is pA == pB. Then we add the wGRR values prepared before.
+Turn into symmetric wGRR matrix. First we generate an matrix filled with 0.0 values: this is the default for pA - pB pairs that did not have a single blast hit between them. Then we fill the diagonal with 1.0: that is pA == pB. Then we add the wGRR values prepared before.
 
 ```{r}
 mat <- matrix(0.0, nrow=length(all_plasmids), ncol=length(all_plasmids),

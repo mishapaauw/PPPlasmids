@@ -2,3 +2,5 @@ data/
 diamond_db/
 output/diamond_out.tsv
 output/xanthomonas_diamond_out.tsv
+output/diamond_out_max-target-5000.tsv
+output/plsdb_diamond_out.tsv

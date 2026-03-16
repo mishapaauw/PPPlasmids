@@ -1,9 +1,7 @@
-diamond makedb --in 'data/proteins.faa' --db 'diamond_db/proteins' --threads 12
-
 diamond blastp \
-	--query 'data/proteins.faa' \
+	--query '/scratch/misha/plsdb/plsdb_mini_clean.fasta' \
 	--db 'diamond_db/proteins' \
-	--out 'output/diamond_out_max-target-5000.tsv' \
+	--out 'output/plsdb_diamond_out.tsv' \
 	--outfmt  6 qseqid sseqid pident length qlen slen qcovhsp evalue bitscore \
 	--evalue  '1e-5' \
 	--query-cover 50 \
@@ -12,3 +10,4 @@ diamond blastp \
 	--max-target-seqs 5000 \
 	--more-sensitive \
 	--no-self-hits
+

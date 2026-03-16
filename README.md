@@ -73,6 +73,21 @@ bash scripts/download_selected_accessions.sh
 clinker data/*.gbk -p output/component8.html
 ```
 
+## Experiment 3: blastp of full plsdb against plant-pathogen plasmid database
+
+```bash
+# on scratch:
+pwd
+/scratch/misha/plsdb
+
+# download all plsdb proteins + metadata of all nuccore accessions:
+wget --content-disposition https://ndownloader.figshare.com/files/49859769
+wget --content-disposition https://ndownloader.figshare.com/files/49859742
+
+# replace space with dash in proteins fasta file:
+cat plsdb_all_proteins.fasta | sed 's/ /-/g' > plsdb_clean.fasta
+```
+
 ## TODO
 
 - Update scripts such that it creates an experiment-level output

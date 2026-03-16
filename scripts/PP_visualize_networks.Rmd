@@ -70,7 +70,7 @@ wgrr_pairs_species %>% group_by(genus_pair) %>%
 ```{r}
 wgrr_pairs_species %>% 
   filter(genus_pA != genus_pB) %>% 
-  filter(wGRR > 0.8)
+  filter(wGRR > 0.85)
 ```
 
 Dickeya - Xanthomonas plasmid pair with 0.9, and a Burkholderia - Xanthomonas pair of 0.87.
@@ -83,12 +83,22 @@ I inspect the burkholderia-xanthomonas pair in greater detail in a clinker synte
 - Then the Xanthomonas hyacinthi plasmid has no apparent cargo genes except for a cytosine methyl transferase and an antitoxin protein
 - The Burkolderia cepacia plasmid has an entire mercury resistance operon. Which occurs in numerous bacterial genome assemblies (blastn of the 10 kb operon on NCBI) and on other plasmids in PLSDB (Agrobacterium!)
 
+
+```{r}
+wgrr_pairs_species %>% 
+  filter(wGRR > 0.8) %>% 
+  filter(pA == "NZ_CP043477.1" | pB == "NZ_CP043477.1")
+```
+
+
+
+
 When going a bit lower in wGRR we start to get quite some hits of very small plasmids (< 1500 bp), let's filter these out
 
 ```{r}
 wgrr_pairs_species %>% 
   filter(genus_pA != genus_pB) %>% 
-  filter(wGRR > 0.6) %>% 
+  filter(wGRR > 0.7) %>% 
   merge(metadata %>% select(accession, length), by.x = "pA", by.y = "accession") %>%
   mutate(length_pA = length) %>% 
   select(-length) %>% 
