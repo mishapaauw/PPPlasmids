@@ -5,14 +5,26 @@ date: "2026-03-16"
 output: html_document
 ---
 
+## The experiment goal
+
 The goal of this experiment is to find out whether plant pathogen plasmids are strongly related to ANY other plasmid of plsdb. With the hypothesis that we should find those if environmental bacteria are source of genetic material for plant pathogen bacteria.
 
 In this experiment, I will attempt to blastp all plsdb proteins to a database of plant pathogen plasmid proteins. Note that this is not an ALL-vs-ALL blast with all plsdb proteins - we are just interested in any plasmids hitting plasmids of plant pathogenic bacteria. That also means that this wGRR calculation will skip the 'reciprocal best hit' part since we don't have reciprocal blastp data.
+
+## Technical note
+
+In previous wGRR analyses, I used `tidyverse` based data manipulation. However, I now have so many blastp hits to process that I need faster packages. I used Claude to transform my `tidyverse` scripts to `data.table`: much faster, but arguably, less readable code. 
+
+The scale of this dataset also means that this notebook needs A LOT of RAM memory: up to 120 GB RAM.
+
+## Analysis
 
 ```{r}
 library(data.table)
 library(stringr)
 library(ggplot2)
+library(tidygraph)
+library(ggraph)
 ```
 
 Load the raw Diamond output:
@@ -77,6 +89,8 @@ Select plasmid pairs with wGRR above 0.1 and go back to the tidyverse:
 
 ```{r}
 wgrr_filtered <- wgrr_pairs[wGRR > 0.1] %>% as_tibble()
+
+message("  ", nrow(wgrr_filtered), " wgrr pairs")
 ```
 
 ```{r}
@@ -100,6 +114,18 @@ wgrr_filtered <- wgrr_filtered %>%
   select(-genus) %>% 
   select(-species_clean) %>% 
   mutate(genus_pair = paste(genus_pA, genus_pB, sep = "-"))
+
+
+message("  ", nrow(wgrr_filtered), " wgrr pairs")
+```
+
+Checkpoint: let's save this file! and load it, in case we start at this point in the analysis
+
+```{r}
+write.csv(wgrr_filtered, '../output/plsdb_wgrr_0.1.csv')
+
+
+wgrr_filtered <- read.csv('../output/plsdb_wgrr_0.1.csv')
 ```
 
 Get list of original plant pathogen accessions:
@@ -109,19 +135,71 @@ plant_pathogens <- read_tsv('../data/metadata.tsv', col_names = c("accession", "
 ```
 Filter wGRR pairs that query plasmid should not be among plant pathogens: 
 
-Note: somehow there are q plasmids still that are among xanthomonas, not sure why!
-
 ```{r}
 wgrr_filtered <- wgrr_filtered %>% filter(!q_plasmid %in% plant_pathogens)
+
+message("  ", nrow(wgrr_filtered), " wgrr pairs")
 ```
 
 Filter wGRR pairs that have less than 5 proteins hits between them
 
 ```{r}
 wgrr_filtered <- wgrr_filtered %>% filter(n_hits > 4)
+
+message("  ", nrow(wgrr_filtered), " wgrr pairs")
 ```
 
 ```{r}
-xcc <- wgrr_filtered %>% filter(species_pB == "Xanthomonas campestris") %>% arrange(desc(wGRR))
+mini <- wgrr_filtered %>% filter(denom > 4) %>% filter(wGRR > 0.5)
+
+message("  ", nrow(mini), " wgrr pairs")
 ```
+
+Different filtering steps result in some interesting observations:
+
+
+```{r}
+wgrr_filtered %>% filter(s_plasmid == "NZ_CP018471.1") %>% arrange(desc(wGRR))
+```
+
+- A Xanthomonas vesicitoria plasmid with very similar plasmids in P. aeruginosa, Burkholderia ambifara, and other species. Plasmid backbone genes are ± 0.95 identical on protein level. Cargo genes differ: in X. vesi, mercury resistance, in other species, integrons with antibiotic/chlorite resistance. Interestingly 2 of these strains are from Argentina!
+
+```{r}
+wgrr_filtered %>% filter(s_plasmid == "NZ_CP091077.1") %>% arrange(desc(wGRR))
+```
+- A small (mobilizable?) plasmid in X. arboricola pv. pruni with many very high similarity matches in Edwardsiella tarda, Citrobacter freundii, Aeromonas species, many of which encoding tetracycline resistance (in fact already discovered in https://doi.org/10.3389/fmicb.2022.821808)
+
+
+```{r}
+wgrr_filtered %>% filter(species_pB == "Erwinia tracheiphila") %>% arrange(desc(wGRR))
+```
+## Network drawing
+
+```{r}
+# per genus pair
+edges_genus <- wgrr_filtered %>%
+  filter(wGRR > 0.8) %>% 
+  group_by(genus_pA, genus_pB) %>%
+  summarise(
+    n_links = n(),
+    mean_wGRR = mean(wGRR),
+    .groups = "drop"
+  ) %>%
+  filter(genus_pA != genus_pB) 
+
+```
+
+```{r}
+g_genus <- as_tbl_graph(edges_genus, directed = FALSE)
+
+ggraph(g_genus, layout = "fr") +
+  geom_edge_link(aes(width = n_links, alpha = mean_wGRR), colour = "steelblue") +
+  geom_node_point(size = 4, colour = "grey30") +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_edge_width(range = c(0.5, 6), name = "# plasmid links") +
+  scale_edge_alpha(range = c(0.3, 1), name = "mean wGRR") +
+  theme_void() +
+  labs(title = "Cross-genus plasmid transfer network")
+```
+
 

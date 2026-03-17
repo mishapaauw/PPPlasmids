@@ -75,6 +75,8 @@ clinker data/*.gbk -p output/component8.html
 
 ## Experiment 3: blastp of full plsdb against plant-pathogen plasmid database
 
+Note this experiment requires a lot of RAM (120 GB) to analyze properly with `plsdb_calculate_wGRR_datatable.R`.
+
 ```bash
 # on scratch:
 pwd
@@ -90,8 +92,9 @@ cat plsdb_all_proteins.fasta | sed 's/ /-/g' > plsdb_clean.fasta
 
 ## TODO
 
-- Update scripts such that it creates an experiment-level output
-- Separate R code in wGRR calculation and visualisation
+- Fix problem where not all 1217 plant pathogen plasmids are actually downloaded to `proteins.faa`. Some are missing.
+- Clean up output files. Need to separate big data output and actual figures/knitted RMDs.
+- clean up random clinker htmls that are accumulating in the repo
 
 ## Requirements
 
@@ -102,4 +105,6 @@ cat plsdb_all_proteins.fasta | sed 's/ /-/g' > plsdb_clean.fasta
 ## References
 
 > de Sousa, J. A. M., Fillol-Salom, A., Penadés, J. R., & Rocha, E. P. (2023). Identification and characterization of thousands of bacteriophage satellites across bacteria. Nucleic acids research, 51(6), 2759-277
+
+> Redondo-Salvo, S., Fernández-López, R., Ruiz, R., Vielva, L., De Toro, M., Rocha, E. P., ... & de la Cruz, F. (2020). Pathways for horizontal gene transfer in bacteria revealed by a global map of their plasmids. Nature communications, 11(1), 3602.
 
