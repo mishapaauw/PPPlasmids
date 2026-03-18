@@ -6,8 +6,8 @@ diamond blastp \
 	--out 'data_intermediate/T3E_hits.tsv' \
 	--outfmt  6 qseqid sseqid pident length qlen slen qcovhsp evalue bitscore \
 	--evalue  '1e-5' \
-	--query-cover 80 \
-	--id      80 \
+	--query-cover 50 \
+	--id      50 \
 	--threads 12 \
 	--max-target-seqs 1 \
 	--more-sensitive \

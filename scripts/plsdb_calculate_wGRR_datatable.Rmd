@@ -221,7 +221,7 @@ T3Es <- T3Es %>% mutate(
 ```{r}
 T3E_counts <- T3Es %>% group_by(q_plasmid) %>% count()
 ```
-Just 445/70k plasmids encode a T3E similar to our database. 
+Just 858/70k plasmids encode a T3E similar to our database. 
 
 ```{r}
 wgrr_t3e <- merge(wgrr_filtered, T3E_counts, by.x = "s_plasmid", by.y = "q_plasmid", all.x = TRUE) %>%
