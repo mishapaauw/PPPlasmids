@@ -1,10 +1,10 @@
 ## PPPlasmids
 
-In this project I will analyse plasmids of plant pathogenic bacteria. I will try to group them together based on 'weighted gene repertoire relatedness': wGRR. 
+In this project I will analyse relatedness between plasmids of (plant pathogenic) bacteria. I will try to group them together based on 'weighted gene repertoire relatedness': wGRR. 
 
 ## Data download
 
-In summary, we will use PLSDB and ncbi-datasets to download a set of plasmids of interest. In the first experiment, we queried PLSDB with just genus `Xanthomonas`. This is hardcoded in the `get_taxonomy.py` script. For the broader experiment accross differt plant pathogens, we will make a PLSDB query with the following taxa:
+In summary, we will use PLSDB and ncbi-datasets to download a set of plasmids of interest. In the first experiment, we queried PLSDB with just genus `Xanthomonas`. This is hardcoded in the `get_taxonomy.py` script. In the second experiment accross different plant pathogens, we will make a PLSDB query with the following taxa:
 
 - _Xylella_ (61 plasmids)
 - _Xanthomonas_ (489 plasmids)
@@ -27,6 +27,8 @@ In summary, we will use PLSDB and ncbi-datasets to download a set of plasmids of
   - _capacia_ (9 plasmids)
   
 Note that both _Ralstonia_ and _Agrobacterium_ are remarkably missing from this list, that's because they have many megaplasmids (or chromids) of over 1 Mbp.
+
+Note: somehow this downloaded not all required plasmids! about 40 are missing. need to look into this.
 
 ```bash
 # Get taxonomy list
@@ -93,8 +95,8 @@ cat plsdb_all_proteins.fasta | sed 's/ /-/g' > plsdb_clean.fasta
 ## TODO
 
 - Fix problem where not all 1217 plant pathogen plasmids are actually downloaded to `proteins.faa`. Some are missing.
-- Clean up output files. Need to separate big data output and actual figures/knitted RMDs.
-- clean up random clinker htmls that are accumulating in the repo
+- Add a BLAST step to a T3E database so we can filter for T3E containing transfers.
+
 
 ## Requirements
 
