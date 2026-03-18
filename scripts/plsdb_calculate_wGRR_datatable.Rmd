@@ -29,7 +29,7 @@ library(ggraph)
 
 Load the raw Diamond output:
 ```{r setup, include=FALSE}
-hits <- fread('../output/plsdb_diamond_out.tsv',
+hits <- fread('../data_intermediate/plsdb_diamond_out.tsv',
   col.names = c("qseqid","sseqid","pident","length","qlen",
                 "slen","qcovhsp","evalue","bitscore"),
   colClasses = c("character","character","numeric","numeric","numeric",
@@ -122,10 +122,9 @@ message("  ", nrow(wgrr_filtered), " wgrr pairs")
 Checkpoint: let's save this file! and load it, in case we start at this point in the analysis
 
 ```{r}
-write.csv(wgrr_filtered, '../output/plsdb_wgrr_0.1.csv')
+# write.csv(wgrr_filtered, '../data_intermediate/plsdb_wgrr_0.1.csv')
 
-
-wgrr_filtered <- read.csv('../output/plsdb_wgrr_0.1.csv')
+wgrr_filtered <- read.csv('../data_intermediate/plsdb_wgrr_0.1.csv') %>% select(-X)
 ```
 
 Get list of original plant pathogen accessions:
@@ -133,6 +132,7 @@ Get list of original plant pathogen accessions:
 ```{r}
 plant_pathogens <- read_tsv('../data/metadata.tsv', col_names = c("accession", "species", "taxid", "length")) %>% pull(accession)
 ```
+
 Filter wGRR pairs that query plasmid should not be among plant pathogens: 
 
 ```{r}
@@ -141,10 +141,10 @@ wgrr_filtered <- wgrr_filtered %>% filter(!q_plasmid %in% plant_pathogens)
 message("  ", nrow(wgrr_filtered), " wgrr pairs")
 ```
 
-Filter wGRR pairs that have less than 5 proteins hits between them
+Filter wGRR pairs that have less than 4 proteins hits between them
 
 ```{r}
-wgrr_filtered <- wgrr_filtered %>% filter(n_hits > 4)
+wgrr_filtered <- wgrr_filtered %>% filter(n_hits > 3)
 
 message("  ", nrow(wgrr_filtered), " wgrr pairs")
 ```
@@ -202,4 +202,41 @@ ggraph(g_genus, layout = "fr") +
   labs(title = "Cross-genus plasmid transfer network")
 ```
 
+## Adding T3E BLAST results
+
+Blasted all plsdb proteins to my T3E database which contains all Pseudomonas syringae, Xanthomonas, Ralstonia T3Es. No definately not all, but it's a good start.
+
+```{r}
+T3Es <- read_tsv('../data_intermediate/T3E_hits.tsv', 
+                 col_names=c("qseqid","sseqid","pident","length","qlen",
+              "slen","qcovhsp","evalue","bitscore"),
+              col_types="ccdddddddd", comment="#")
+```
+
+```{r}
+T3Es <- T3Es %>% mutate(
+  q_plasmid = stringr::word(qseqid, 2, 2, "-"))
+```
+
+```{r}
+T3E_counts <- T3Es %>% group_by(q_plasmid) %>% count()
+```
+Just 445/70k plasmids encode a T3E similar to our database. 
+
+```{r}
+wgrr_t3e <- merge(wgrr_filtered, T3E_counts, by.x = "s_plasmid", by.y = "q_plasmid", all.x = TRUE) %>%
+            mutate(n_T3Es_q_plasmid = n) %>% 
+            select(-n) %>% 
+            merge(T3E_counts, by.x = "q_plasmid", by.y = "q_plasmid", all.x = TRUE) %>%
+            mutate(n_T3Es_s_plasmid = n) %>% 
+            select(-n)
+                
+```
+
+
+```{r}
+wgrr_t3e %>% filter(wGRR > 0.8) %>%  
+            filter(species_pA != species_pB) %>% 
+             filter(n_T3Es_q_plasmid > 0 & n_T3Es_s_plasmid > 0 )
+```
 
